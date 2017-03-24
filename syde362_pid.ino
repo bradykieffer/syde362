@@ -50,13 +50,12 @@ void setup() {
 
 void loop() { 
   int delay_ms = 2500;
-  
   Serial.println("FET_ONE IS HIGH AF");
   digitalWrite(FET_ONE, HIGH);
   delay(delay_ms);
   digitalWrite(FET_ONE, LOW);
   Serial.println("FET_ONE IS LOWWWWW");
-  // Serial.print("FET_ONE: Proximity to plate: \t"); Serial.print(pollProximity()); Serial.print("\t\t\t\r");
+  //Serial.print("FET_ONE: Proximity to plate: \t"); Serial.print(pollProximity()); Serial.print("\t\t\t\r");
   delay(delay_ms);
 
   /*
@@ -65,7 +64,7 @@ void loop() {
   delay(delay_ms);
   digitalWrite(FET_TWO, LOW);
   Serial.println("FET_TWO IS LOWWWWW");
-  // Serial.print("FET_TWO: Proximity to plate: \t"); Serial.print(pollProximity()); Serial.print("\t\t\t\r");
+  Serial.print("FET_TWO: Proximity to plate: \t"); Serial.print(pollProximity()); Serial.print("\t\t\t\r");
   delay(delay_ms);
   */
 }
