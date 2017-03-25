@@ -3,18 +3,33 @@
  */
 #include <Wire.h>
 #include "Adafruit_VCNL4010.h"
+#include <PID_v1.h>
 
 Adafruit_VCNL4010 vcnl;
 
-static int FIDELITY = 100;
+//Define Variables we'll be connecting to
+double Setpoint, Input, Output;
+
+//Specify the links and initial tuning parameters
+double Kp = 32609.0;
+double Ki = 34517.0;
+double Kd = 7086;
+
+PID pid(&Input, &Output, &Setpoint, Kp,Ki,Kd, DIRECT);
+
+static double FIDELITY = 157.35;
 
 static int FET_ONE = 3; // The black magnet
-static int FET_TWO = 6; // The yellow magnet
+static int FET_TWO = 5; // The yellow magnet
 
 double HIGH_PROX_VAL = 0.0;
 double LOW_PROX_VAL  = 0.0;
 
+int WindowSize = 5000;
+unsigned long windowStartTime;
+
 void setupProximitySensor(double &high_val, double &low_val); 
+void setupPID();
 double pollProximity();
 void pwm(int pin, double high, double low);
 
@@ -31,8 +46,12 @@ void setup() {
     while(1);  
   }
   Serial.println("############## SENSOR CALIBRATION ###############");
-  // setupProximitySensor(HIGH_PROX_VAL, LOW_PROX_VAL);
+  setupProximitySensor(HIGH_PROX_VAL, LOW_PROX_VAL);
   Serial.println("############ DONE SENSOR CALIBRATION ############");
+
+  Serial.println("################### SET UP PID ##################");
+  setupPID();
+  Serial.println("################### DONE PID ####################");
 
   // Set up the fets and set them both low.
   pinMode(FET_ONE, OUTPUT);
@@ -41,51 +60,30 @@ void setup() {
   digitalWrite(FET_ONE, LOW);
   digitalWrite(FET_TWO, LOW);
   Serial.println("############## BEGINNING MAIN LOOP ##############");
-  for(int i = 1; i < 6; ++i){
-    Serial.println(i);
+  for(int i = 5; i > 0; --i){
+    Serial.print(i); Serial.print("\r");
     delay(1000);  
   }
 }
 
 
 void loop() { 
-  int delay_ms = 2500;
-  int ledPin = FET_ONE;
-  // fade in from min to max in increments of 5 points:
-  for (int fadeValue = 0 ; fadeValue <= 255; fadeValue += 5) {
-    // sets the value (range from 0 to 255):
-    analogWrite(ledPin, fadeValue);
-    // wait for 30 milliseconds to see the dimming effect
-    delay(30);
-  }
-
-  // fade out from max to min in increments of 5 points:
-  for (int fadeValue = 255 ; fadeValue >= 0; fadeValue -= 5) {
-    // sets the value (range from 0 to 255):
-    analogWrite(ledPin, fadeValue);
-    // wait for 30 milliseconds to see the dimming effect
-    delay(30);
-  }
-
-  /*
   
-  Serial.println("FET_ONE IS HIGH AF");
-  digitalWrite(FET_ONE, HIGH);
-  delay(delay_ms);
-  digitalWrite(FET_ONE, LOW);
-  Serial.println("FET_ONE IS LOWWWWW");
-  //Serial.print("FET_ONE: Proximity to plate: \t"); Serial.print(pollProximity()); Serial.print("\t\t\t\r");
-  delay(delay_ms);
-  */
-  /*
-  Serial.println("FET_TWO IS HIGH AF");
-  digitalWrite(FET_TWO, HIGH);
-  delay(delay_ms);
-  digitalWrite(FET_TWO, LOW);
-  Serial.println("FET_TWO IS LOWWWWW");
-  Serial.print("FET_TWO: Proximity to plate: \t"); Serial.print(pollProximity()); Serial.print("\t\t\t\r");
-  delay(delay_ms);
-  */
+  double yellow_dist = pollProximity();
+  yellow_dist /= 10000;
+  double black_dist = -yellow_dist;
+  if(yellow_dist > 0.003){
+    Input = yellow_dist;  
+  }else if(black_dist > 0.003){
+    Input = black_dist;
+  }else{
+    Input = 0.0;  
+  }
+  pid.Compute();
+  Serial.print("Output of PID: "); Serial.println(Output, DEC);
+  Serial.print("Input to PID: "); Serial.println(Input, DEC);
+  Serial.print("Ylw: "); Serial.print(yellow_dist, DEC); Serial.print("\tBlk: "); Serial.println(black_dist, DEC);
+  delay(1000);
 }
 
 /*
@@ -97,7 +95,7 @@ void loop() {
  * e.g. [-100, 100]
  */
 double pollProximity(){
-  return map(vcnl.readProximity(), HIGH_PROX_VAL, LOW_PROX_VAL, -FIDELITY, FIDELITY);
+  return map(vcnl.readProximity(), HIGH_PROX_VAL, LOW_PROX_VAL, FIDELITY, -FIDELITY) + (FIDELITY / 2.0);
 }
 
 /*
@@ -148,4 +146,15 @@ void setupProximitySensor(double &high_val, double &low_val){
   Serial.println();
   Serial.print("I'll use the high value: "); Serial.println(high_val);
   Serial.print("and the low value: ");       Serial.println(low_val);
+}
+
+void setupPID(){
+  //initialize the variables we're linked to
+  Setpoint = 0;
+
+  //tell the PID to range between 0 and the full window size
+  pid.SetOutputLimits(0, 1);
+
+  //turn the PID on
+  pid.SetMode(AUTOMATIC);  
 }
