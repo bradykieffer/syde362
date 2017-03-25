@@ -11,9 +11,9 @@ Adafruit_VCNL4010 vcnl;
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp = 32609.0;
-double Ki = 34517.0;
-double Kd = 7086;
+double Kp = 0.1; //32609.0;
+double Ki = 5.0; //34517.0;
+double Kd = 1; //7086;
 
 PID pid(&Input, &Output, &Setpoint, Kp,Ki,Kd, DIRECT);
 
@@ -70,8 +70,12 @@ void setup() {
 void loop() { 
   
   double yellow_dist = pollProximity();
-  yellow_dist /= 10000;
-  double black_dist = -yellow_dist;
+  double black_dist = FIDELITY - yellow_dist;
+  yellow_dist /= 10; // 10000;
+  black_dist  /= 10; // 10000;
+  
+
+  
   if(yellow_dist > 0.003){
     Input = yellow_dist;  
   }else if(black_dist > 0.003){
@@ -79,11 +83,12 @@ void loop() {
   }else{
     Input = 0.0;  
   }
+  
   pid.Compute();
-  Serial.print("Output of PID: "); Serial.println(Output, DEC);
-  Serial.print("Input to PID: "); Serial.println(Input, DEC);
-  Serial.print("Ylw: "); Serial.print(yellow_dist, DEC); Serial.print("\tBlk: "); Serial.println(black_dist, DEC);
-  delay(1000);
+  Serial.print("Input: "); Serial.print(Input, DEC); Serial.print("\t Output: "); Serial.print(Output, DEC); Serial.print("\r");
+  //Serial.print("Input to PID: "); Serial.println(Input, DEC);
+  //Serial.print("Ylw: "); Serial.print(yellow_dist, DEC); Serial.print("\tBlk: "); Serial.println(black_dist, DEC);
+  delay(100);
 }
 
 /*
@@ -153,8 +158,9 @@ void setupPID(){
   Setpoint = 0;
 
   //tell the PID to range between 0 and the full window size
-  pid.SetOutputLimits(0, 1);
+  pid.SetOutputLimits(0, 255);
 
   //turn the PID on
   pid.SetMode(AUTOMATIC);  
+  pid.SetSampleTime(1);
 }
