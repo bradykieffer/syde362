@@ -11,11 +11,11 @@ Adafruit_VCNL4010 vcnl;
 double Setpoint, Input, Output;
 
 //Specify the links and initial tuning parameters
-double Kp = 0.1; //32609.0;
-double Ki = 5.0; //34517.0;
-double Kd = 1; //7086;
+double Kp = 500.0; //32609.0;
+double Ki = 1.0;//5.0;   //34517.0;
+double Kd = 1.0;//3.0;   //7086;
 
-PID pid(&Input, &Output, &Setpoint, Kp,Ki,Kd, DIRECT);
+PID pid(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 
 static double FIDELITY = 157.35;
 
@@ -60,35 +60,69 @@ void setup() {
   digitalWrite(FET_ONE, LOW);
   digitalWrite(FET_TWO, LOW);
   Serial.println("############## BEGINNING MAIN LOOP ##############");
-  for(int i = 5; i > 0; --i){
+  for(int i = 2; i > 0; --i){
     Serial.print(i); Serial.print("\r");
     delay(1000);  
   }
 }
 
+int trigger_pin = -1;
+int prev_pin = -1;
+
+double yellow_dist = 0;
+double black_dist  = 0;
+
+double yellow_dist_old = 0;
+double black_dist_old  = 0;
+
+double yellow_dist_old_old = 0;
+double black_dist_old_old  = 0;
 
 void loop() { 
   
-  double yellow_dist = pollProximity();
-  double black_dist = FIDELITY - yellow_dist;
-  yellow_dist /= 10; // 10000;
-  black_dist  /= 10; // 10000;
-  
+  yellow_dist_old_old = yellow_dist_old;
+  black_dist_old_old  = black_dist_old;
 
+  yellow_dist_old = yellow_dist;
+  black_dist_old  = black_dist;
   
-  if(yellow_dist > 0.003){
-    Input = yellow_dist;  
-  }else if(black_dist > 0.003){
-    Input = black_dist;
+  yellow_dist = pollProximity();       // FET_TWO pin = 5
+  black_dist = FIDELITY - yellow_dist - 1.21031; // FET_ONE pin = 3
+  
+  yellow_dist /= 10000;
+  black_dist  /= 10000;
+
+  double yellow_dist_ave = (yellow_dist_old_old + yellow_dist_old + yellow_dist) / 3.0;
+  double black_dist_ave = (black_dist_old_old + black_dist_old + black_dist) / 3.0;
+  
+  if(yellow_dist_ave > 0.0){
+    Input = yellow_dist_ave;
+    trigger_pin = FET_TWO;
+  }else if(black_dist_ave > 0.0){
+    Input = black_dist_ave;
+    trigger_pin = FET_ONE;
   }else{
     Input = 0.0;  
+    trigger_pin = -1;
+  }
+
+  // Input *= -1.0;
+
+  if(trigger_pin != prev_pin){
+    analogWrite(prev_pin, 0);  
+  }
+  pid.Compute();
+  double scaled_output = 0.0;
+  if(trigger_pin > 0){
+    scaled_output = map(Output, 0, 7, 0, 255);
+    analogWrite(trigger_pin, scaled_output);
   }
   
-  pid.Compute();
-  Serial.print("Input: "); Serial.print(Input, DEC); Serial.print("\t Output: "); Serial.print(Output, DEC); Serial.print("\r");
-  //Serial.print("Input to PID: "); Serial.println(Input, DEC);
-  //Serial.print("Ylw: "); Serial.print(yellow_dist, DEC); Serial.print("\tBlk: "); Serial.println(black_dist, DEC);
-  delay(100);
+  Serial.print("Input: "); Serial.print(Input, DEC); Serial.print("\t Output: "); Serial.print(Output, DEC); 
+  Serial.print("\tTriggering: "); Serial.print(trigger_pin); Serial.print("\tPrev: "); Serial.print(prev_pin); 
+  Serial.print("\tScaled Out: "); Serial.print(scaled_output); Serial.print("\t\t\r");
+  
+  prev_pin = trigger_pin;
 }
 
 /*
@@ -130,7 +164,6 @@ void setupProximitySensor(double &high_val, double &low_val){
   
   digitalWrite(pin, LOW);
   Serial.println("Push the cart all the way HIGH");
-  Serial.print("4\r"); delay(1000);
   Serial.print("3\r"); delay(1000);
   Serial.print("2\r"); delay(1000);
   digitalWrite(pin, HIGH);
@@ -139,7 +172,6 @@ void setupProximitySensor(double &high_val, double &low_val){
   digitalWrite(pin, LOW);
   
   Serial.println("Push the cart all the way LOW");
-  Serial.print("4\r"); delay(1000);
   Serial.print("3\r"); delay(1000);
   Serial.print("2\r"); delay(1000);
   
@@ -158,7 +190,7 @@ void setupPID(){
   Setpoint = 0;
 
   //tell the PID to range between 0 and the full window size
-  pid.SetOutputLimits(0, 255);
+  pid.SetOutputLimits(0, 7);
 
   //turn the PID on
   pid.SetMode(AUTOMATIC);  
